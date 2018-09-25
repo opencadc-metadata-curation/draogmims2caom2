@@ -73,7 +73,7 @@ import os
 import sys
 import traceback
 
-from caom2 import Observation
+from caom2 import Observation, shape
 from caom2utils import ObsBlueprint, get_gen_proc_arg_parser, gen_proc
 from caom2pipe import manage_composable as mc
 from caom2pipe import execute_composable as ec
@@ -96,7 +96,18 @@ class GMIMSName(ec.StorageName):
 
     def __init__(self, obs_id=None, fname_on_disk=None, file_name=None):
         self.fname_in_ad = file_name
-        # obs_id = file_name.replace('.fits', '')
+        if obs_id is None:
+            if file_name is not None:
+                obs_id = file_name.replace('.fits', '')
+            else:
+                raise mc.CadcException('Expecting to run GMIMS by file names.')
+        # TODO - the constructor runs somewhere there is an obs id parameter
+        # provided - look into that
+        # else:
+        #     raise mc.CadcException(
+        #         'observation ID {}. Expecting to run GMIMS by file '
+        #         'names.'.format(obs_id))
+
         super(GMIMSName, self).__init__(
             obs_id, COLLECTION, GMIMSName.GMIMS_NAME_PATTERN, fname_on_disk)
 
@@ -119,6 +130,8 @@ def accumulate_bp(bp, uri):
     bp.set('Observation.observationID', 'test_obs_id')
     bp.set('Plane.dataProductType', 'cube')
     bp.set('Plane.calibrationLevel', '4')
+    bp.set('Plane.metaRelease', '2030-01-01')
+    bp.set('Plane.dataRelease', '2030-01-01')
     logging.debug('Done accumulate_bp.')
 
 
@@ -137,6 +150,41 @@ def update(observation, **kwargs):
     fqn = None
     if 'fqn' in kwargs:
         fqn = kwargs['fqn']
+
+    from caom2 import shape, Point, Position
+    # # HDU 0 in drao_60rad.mod.fits:
+    # SIMPLE  =                    T / conforms to FITS standard
+    # BITPIX  =                  -64 / array data type
+    # NAXIS   =                    3 / number of array dimensions
+    # NAXIS1  =                  720
+    # NAXIS2  =                  360
+    # NAXIS3  =                  161
+    # COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy
+    # COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H
+    # CTYPE1  = 'GLON-CAR'           / x-axis
+    # CTYPE2  = 'GLAT-CAR'           / y-axis
+    # CTYPE3  = 'RM      '           / z-axis
+    # CRVAL1  =                  0.0 / reference pixel value
+    # CRVAL2  =                  0.0 / reference pixel value
+    # CRVAL3  =                -400. / reference pixel value
+    # CRPIX1  =                360.5 / reference value
+    # CRPIX2  =                  181 / reference value
+    # CRPIX3  =                   1. / reference value
+    # CDELT1  =                 -0.5 / Degrees/pixel
+    # CDELT2  =                  0.5 / Degrees/pixel
+    # CDELT3  =                   5. / Degrees/pixel
+    # CUNIT1  = 'deg     '
+    # CUNIT2  = 'deg     '
+    # CUNIT3  = 'rad/m2  '
+
+    for ii in observation.planes:
+        plane = observation.planes[ii]
+        center = Point(0.0, 0.0)
+        width = 720 * 0.5
+        height = 360 * 0.5
+        plane.position = Position()
+        plane.position.bounds = shape.Box(center, width, height)
+        logging.error('set bounds')
 
     logging.debug('Done update.')
     return True
@@ -169,10 +217,10 @@ def _build_blueprints(uri):
 def _get_uri(args):
     result = None
     if args.observation:
-        result = GMIMSName(args.observation[1]).file_uri
+        result = GMIMSName(obs_id=args.observation[1]).file_uri
     elif args.local:
         obs_id = GMIMSName.remove_extensions(os.path.basename(args.local[0]))
-        result = GMIMSName(obs_id).file_uri
+        result = GMIMSName(obs_id=obs_id).file_uri
     elif args.lineage:
         result = args.lineage[0].split('/', 1)[1]
     else:
