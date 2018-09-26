@@ -73,7 +73,8 @@ import os
 import sys
 import traceback
 
-from caom2 import Observation, shape
+from caom2 import Observation, shape, CoordAxis1D, CoordBounds1D, RefCoord
+from caom2 import Chunk, TemporalWCS, CoordRange1D
 from caom2utils import ObsBlueprint, get_gen_proc_arg_parser, gen_proc
 from caom2pipe import manage_composable as mc
 from caom2pipe import execute_composable as ec
@@ -151,7 +152,7 @@ def update(observation, **kwargs):
     if 'fqn' in kwargs:
         fqn = kwargs['fqn']
 
-    from caom2 import shape, Point, Position
+    # from caom2 import shape, Point, Position
     # # HDU 0 in drao_60rad.mod.fits:
     # SIMPLE  =                    T / conforms to FITS standard
     # BITPIX  =                  -64 / array data type
@@ -179,15 +180,43 @@ def update(observation, **kwargs):
 
     for ii in observation.planes:
         plane = observation.planes[ii]
-        center = Point(0.0, 0.0)
-        width = 720 * 0.5
-        height = 360 * 0.5
-        plane.position = Position()
-        plane.position.bounds = shape.Box(center, width, height)
-        logging.error('set bounds')
+        # center = Point(0.0, 0.0)
+        # width = 720 * 0.5
+        # height = 360 * 0.5
+        # plane.position = Position()
+        # plane.position.bounds = shape.Box(center, width, height)
+        # logging.error('set bounds')
+        _update_time(plane)
 
     logging.debug('Done update.')
     return True
+
+
+def _update_time(chunk):
+    survey = [['07-sep-2009', '21-sep-2009'],
+              ['30-nov-2009', '09-dec-2009'],
+              ['23-feb-2010', '09-mar-2010'],
+              ['25-jun-2010', '08-jul-2010'],
+              ['26-aug-2010', '10-sep-2010'],
+              ['10-nov-2010', '24-nov-2010'],
+              ['09-feb-2011', '23-feb-2011'],
+              ['20-oct-2011', '10-nov-2011'],
+              ['08-feb-2012', '29-feb-2012'],
+              ['08-jun-2012', '02-jul-2012']]
+    mc.check_param(chunk, Chunk)
+    time_axis = CoordAxis1D(Axis('TIME', 'd'))
+    if chunk.time is None:
+        chunk.time = TemporalWCS()
+    # from vlass time - put into astro_composable
+    for ii in survey:
+        start_date = ac.get_datetime(survey[ii][0])
+        end_date = ac.get_datetime(survey[ii][1])
+        start_date.format = 'mjd'
+        end_date.format = 'mjd'
+        start_ref_coord= RefCoord(0.5, start_date.value)
+        end_ref_coord = RefCoord(1.5, end_date.value)
+        time_axis.bounds.samples.append(CoordRange1D(start_ref_coord,
+                                                     end_ref_coord))
 
 
 def _update_typed_set(typed_set, new_set):
