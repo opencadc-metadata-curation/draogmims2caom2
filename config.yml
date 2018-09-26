@@ -1,9 +1,11 @@
-working_directory: /usr/src/app/draogmims2caom2
+working_directory: /usr/src/app
 # the netrc_filename value must be a fully-qualified name
-netrc_filename: /usr/src/app/netrc
+# netrc_filename: /usr/src/app/test_netrc
 # operational value is ivo://cadc.nrc.ca/caom2repo
+# tardis value is ivo://cadc.nrc.ca/ams
 resource_id: ivo://cadc.nrc.ca/sc2repo
 todo_file_name: todo.txt
+proxy_file_name: /usr/src/app/cadcproxy.pem
 # values True False
 use_local_files: True
 # values DEBUG INFO WARN ERROR
@@ -12,26 +14,12 @@ logging_level: DEBUG
 log_to_file: True
 # fully qualified name for a directory to write log files
 log_file_directory: /usr/src/app/logs
-# the filename where success logs are written
-#
-# this file is created in the logs directory, default is 'success_log.txt'
-success_log_file_name: success_log.txt
-# the filename where failure logs are written
-#
-# this file is created in the logs directory, default is 'failure_log.txt'
-failure_log_file_name: failure_log.txt
-# the filename where retry ids are written. This file is only written
-# if use_local_files is False.
-#
-# this file is created in the logs directory, default is 'retries.txt'
-retry_file_name: retries.txt
 # ad stream value - sorry
 stream: raw
 # how to control the work that gets done
-# possible values are:
-# - scrape, store, ingest, modify, visit
 task_types: 
-  - ingest
+  - remote
 features:
   supports_composite: False
+  run_in_airflow: False
   use_file_names: True

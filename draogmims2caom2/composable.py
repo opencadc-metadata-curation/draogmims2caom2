@@ -79,7 +79,8 @@ data_visitors = []
 
 
 def draogmims_run():
-    ec.run_by_file(GMIMSName, APPLICATION, COLLECTION, None, meta_visitors,
+    proxy = '/usr/src/app/cadcproxy.pem'
+    ec.run_by_file(GMIMSName, APPLICATION, COLLECTION, proxy, meta_visitors,
                    data_visitors)
 
 

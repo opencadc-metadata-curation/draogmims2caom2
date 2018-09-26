@@ -74,8 +74,10 @@ import sys
 import traceback
 
 from caom2 import Observation, shape, CoordAxis1D, CoordBounds1D, RefCoord
-from caom2 import Chunk, TemporalWCS, CoordRange1D
+from caom2 import Plane, TemporalWCS, CoordRange1D
+from caom2 import Time as caom_Time
 from caom2utils import ObsBlueprint, get_gen_proc_arg_parser, gen_proc
+from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 from caom2pipe import execute_composable as ec
 
@@ -114,6 +116,9 @@ class GMIMSName(ec.StorageName):
 
     # def get_file_uri(self):
     #     return 'ad:DRAO/drao_60rad.mod.fits'
+    @property
+    def file_uri(self):
+        return 'ad:{}/{}'.format(self.collection, self.file_name)
 
     def is_valid(self):
         return True
@@ -123,16 +128,32 @@ def accumulate_bp(bp, uri):
     """Configure the DRAO-ST-specific ObsBlueprint at the CAOM model Observation
     level."""
     logging.debug('Begin accumulate_bp.')
-    bp.configure_position_axes((1,2))
-    # bp.configure_time_axis(3)
-    # bp.configure_energy_axis(4)
-    # bp.configure_polarization_axis(5)
-    # bp.configure_observable_axis(6)
+
     bp.set('Observation.observationID', 'test_obs_id')
+    bp.set('Observation.proposal.id', 'GMIMS')
+    bp.set('Observation.proposal.pi', 'Maik Wolleben')
+    bp.set('Observation.proposal.project',
+           'Global Magneto-Ionic Medium Survey')
+    bp.set('Observation.proposal.title',
+           '300 to 900 MHz Rotation Measure Survey')
+    bp.set('Observation.proposal.keywords', 'Galactic')
+
+    bp.set('Observation.telescope.name', 'John A. Galt')
+    x, y, z = ac.get_location(48.320000, -119.620000, 545.0)
+    bp.set('Observation.telescope.geoLocationX', x)
+    bp.set('Observation.telescope.geoLocationY', y)
+    bp.set('Observation.telescope.geoLocationZ', z)
+
+    bp.set('Observation.instrument.name', 'GMIMS High Frequency Receiver')
+    bp.set('Observation.target.name', 'Northern Sky from +87 to -30')
+
     bp.set('Plane.dataProductType', 'cube')
     bp.set('Plane.calibrationLevel', '4')
     bp.set('Plane.metaRelease', '2030-01-01')
     bp.set('Plane.dataRelease', '2030-01-01')
+
+    bp.configure_position_axes((1, 2))
+
     logging.debug('Done accumulate_bp.')
 
 
@@ -192,31 +213,34 @@ def update(observation, **kwargs):
     return True
 
 
-def _update_time(chunk):
-    survey = [['07-sep-2009', '21-sep-2009'],
-              ['30-nov-2009', '09-dec-2009'],
-              ['23-feb-2010', '09-mar-2010'],
-              ['25-jun-2010', '08-jul-2010'],
-              ['26-aug-2010', '10-sep-2010'],
-              ['10-nov-2010', '24-nov-2010'],
-              ['09-feb-2011', '23-feb-2011'],
-              ['20-oct-2011', '10-nov-2011'],
-              ['08-feb-2012', '29-feb-2012'],
-              ['08-jun-2012', '02-jul-2012']]
-    mc.check_param(chunk, Chunk)
-    time_axis = CoordAxis1D(Axis('TIME', 'd'))
-    if chunk.time is None:
-        chunk.time = TemporalWCS()
-    # from vlass time - put into astro_composable
+def _update_time(plane):
+    logging.debug('Begin _update_time')
+    # dates are from the GMIMS paper The Global Magneto-Ionic Survey:
+    # Polarimetry of the Southern Sky from 300 to 480 MHz
+    #
+    survey = [['2009-09-07', '2009-09-21'],
+              ['2009-11-30', '2009-12-09'],
+              ['2010-02-23', '2010-03-09'],
+              ['2010-06-25', '2010-07-08'],
+              ['2010-08-26', '2010-09-10'],
+              ['2010-11-10', '2010-11-24'],
+              ['2011-02-09', '2011-02-23'],
+              ['2011-10-20', '2011-11-10'],
+              ['2012-02-08', '2012-02-29'],
+              ['2012-06-08', '2012-07-02']]
+    mc.check_param(plane, Plane)
+    samples = []
     for ii in survey:
-        start_date = ac.get_datetime(survey[ii][0])
-        end_date = ac.get_datetime(survey[ii][1])
-        start_date.format = 'mjd'
-        end_date.format = 'mjd'
-        start_ref_coord= RefCoord(0.5, start_date.value)
-        end_ref_coord = RefCoord(1.5, end_date.value)
-        time_axis.bounds.samples.append(CoordRange1D(start_ref_coord,
-                                                     end_ref_coord))
+        start_date = ac.get_datetime(ii[0])
+        end_date = ac.get_datetime(ii[1])
+        time_bounds = ac.build_plane_time_sample(start_date, end_date)
+        samples.append(time_bounds)
+    survey_start = ac.get_datetime(survey[0][0])
+    survey_end = ac.get_datetime(survey[9][1])
+    interval = ac.build_plane_time_interval(survey_start, survey_end, samples)
+    plane.time = caom_Time(bounds=interval,
+                           dimension=1)
+    logging.debug('End _update_time')
 
 
 def _update_typed_set(typed_set, new_set):
